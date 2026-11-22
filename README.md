@@ -1,0 +1,2 @@
+# arqcomp_cruzadinha_sprint3_pietrogds
+Joguinho para estudos de arquitetura computacional
