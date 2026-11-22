@@ -306,7 +306,15 @@ const App = (() => {
     iniciarCenario();
 
     // inicia os módulos que foram carregados (história, cruzadinha...)
-    Object.values(modulos).forEach((m) => m.iniciar && m.iniciar());
+    // se um deles der erro, os outros continuam e a tela inicial aparece mesmo assim
+    Object.entries(modulos).forEach(([nome, m]) => {
+      try {
+        if (m.iniciar) m.iniciar();
+      } catch (erro) {
+        console.error(`Erro ao iniciar o módulo "${nome}":`, erro);
+        delete modulos[nome];
+      }
+    });
 
     irPara("tela-titulo");
   }

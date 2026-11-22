@@ -2,12 +2,12 @@
    CRUZADINHA.JS — o Núcleo de Cristal
    - monta o tabuleiro a partir de PALAVRAS
    - digitação direto nas casas + navegação por teclado
-   - Conferir, Reiniciar e contador de acertos
+   - Conferir, Reiniciar, contador e dica com gota
    ========================================================= */
 
 const Cruzadinha = (() => {
   const estado = App.estado;
-  let tela, grade, barraPista, listaH, listaV, contador;
+  let tela, grade, barraPista, listaH, listaV, contador, btnDica;
 
   const casas = {};        // "l,c" -> { input, div, palavras: [] }
   let selecao = { palavra: null, linha: 0, coluna: 0 };
@@ -68,6 +68,7 @@ const Cruzadinha = (() => {
 
       <div class="cz-acoes">
         <button class="btn verde" id="cz-conferir">✔ Conferir</button>
+        <button class="btn" id="cz-dica">💧 Revelar letra</button>
         <button class="btn vermelho" id="cz-reiniciar">↺ Reiniciar</button>
       </div>
 
@@ -91,12 +92,14 @@ const Cruzadinha = (() => {
     listaH = tela.querySelector("#cz-lista-h");
     listaV = tela.querySelector("#cz-lista-v");
     contador = tela.querySelector("#cz-contador");
+    btnDica = tela.querySelector("#cz-dica");
 
     montarGrade();
     montarPistas();
 
     tela.querySelector("#cz-conferir").addEventListener("click", conferir);
     tela.querySelector("#cz-reiniciar").addEventListener("click", pedirReinicio);
+    btnDica.addEventListener("click", usarDica);
   }
 
   function montarGrade() {
@@ -153,6 +156,9 @@ const Cruzadinha = (() => {
         }
       });
     });
+
+    // casas reveladas com gota ficam travadas
+    Object.keys(estado.reveladas).forEach((k) => travarRevelada(k));
   }
 
   function montarPistas() {
@@ -253,6 +259,12 @@ const Cruzadinha = (() => {
 
   function aoTeclar(e, l, c) {
     const k = chave(l, c);
+    // casa revelada não aceita letra: só pula para a próxima
+    if (casas[k].input.readOnly && /^[a-zA-Z]$/.test(e.key)) {
+      e.preventDefault();
+      mover(1);
+      return;
+    }
     switch (e.key) {
       case "Backspace":
         if (!casas[k].input.value) {
@@ -298,7 +310,7 @@ const Cruzadinha = (() => {
     const prox = cels[pos + passo];
     if (!prox) return;
     const k = chave(prox.l, prox.c);
-    if (apagar) {
+    if (apagar && !casas[k].input.readOnly) {
       casas[k].input.value = "";
       estado.letras[k] = "";
       App.salvar();
@@ -384,7 +396,7 @@ const Cruzadinha = (() => {
     Sfx.clique();
     App.modal({
       titulo: "Reiniciar o tabuleiro?",
-      html: "<p>Todas as letras serão apagadas.</p>",
+      html: "<p>Todas as letras serão apagadas (as gotas que você já gastou não voltam).</p>",
       botoes: [
         { texto: "Cancelar", classe: "vidro-btn" },
         { texto: "Limpar tudo", classe: "vermelho", acao: reiniciar },
@@ -394,12 +406,14 @@ const Cruzadinha = (() => {
 
   function reiniciar() {
     estado.letras = {};
+    estado.reveladas = {};
     estado.venceu = false;
     App.salvar();
     resultado = {};
     Object.values(casas).forEach((casa) => {
       casa.input.value = "";
-      casa.div.classList.remove("certa", "errada", "brilho");
+      casa.input.readOnly = false;
+      casa.div.classList.remove("certa", "errada", "revelada", "brilho");
     });
     tela.querySelectorAll(".cz-item").forEach((li) => li.classList.remove("certa", "errada"));
     tela.classList.remove("vitoria");
@@ -411,9 +425,49 @@ const Cruzadinha = (() => {
     App.toast("Tabuleiro reiniciado 🫧");
   }
 
+  /* ---------- dica: gastar gota para revelar letra ---------- */
+  function travarRevelada(k) {
+    const casa = casas[k];
+    if (!casa) return;
+    casa.input.readOnly = true;
+    casa.div.classList.add("revelada");
+  }
+
+  function usarDica() {
+    if (selecao.palavra === null) {
+      Sfx.erro();
+      return App.toast("Primeiro selecione uma palavra no tabuleiro.");
+    }
+    const p = PALAVRAS[selecao.palavra];
+    const alvo = celulasDa(p).find(({ l, c, letra }) => estado.letras[chave(l, c)] !== letra);
+    if (!alvo) {
+      return App.toast("Essa palavra já está certinha! ✨");
+    }
+    if (estado.gotas <= 0) {
+      Sfx.erro();
+      return App.toast("Sem gotas! Ganhe mais respondendo perguntas na aventura. 💧");
+    }
+    App.gastarGota();
+    const k = chave(alvo.l, alvo.c);
+    estado.letras[k] = alvo.letra;
+    estado.reveladas[k] = true;
+    App.salvar();
+    casas[k].input.value = alvo.letra;
+    limparMarcas(k);
+    travarRevelada(k);
+    Sfx.gota();
+    selecionarPalavra(selecao.palavra, true);
+    atualizarBotaoDica();
+  }
+
+  function atualizarBotaoDica() {
+    btnDica.textContent = `💧 Revelar letra (${estado.gotas})`;
+  }
+
   /* ---------- API do módulo ---------- */
   function abrir() {
     App.irPara("tela-cruzadinha");
+    atualizarBotaoDica();
     setTimeout(() => {
       if (selecao.palavra === null) {
         const primeira = PALAVRAS.findIndex((p) => p.numero === 1);
@@ -427,7 +481,7 @@ const Cruzadinha = (() => {
     montar();
   }
 
-  return { iniciar, abrir };
+  return { iniciar, abrir, atualizarBotaoDica };
 })();
 
 App.registrar("cruzadinha", Cruzadinha);
