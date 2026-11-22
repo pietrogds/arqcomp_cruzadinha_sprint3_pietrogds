@@ -491,6 +491,11 @@
   background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(140, 230, 255, 0.6) 45%, rgba(255, 255, 255, 0) 70%);
   animation: flutua 3s ease-in-out infinite, brilho-cristal 2s ease-in-out infinite alternate;
 }
+/* contorno no cristal para destacar do brilho do fundo */
+.final-cristal canvas {
+  filter: drop-shadow(3px 0 0 #0a5f99) drop-shadow(-3px 0 0 #0a5f99) drop-shadow(0 3px 0 #0a5f99) drop-shadow(0 -3px 0 #0a5f99);
+}
+
 @keyframes brilho-cristal {
   from { filter: drop-shadow(0 0 8px #8fe8ff); }
   to   { filter: drop-shadow(0 0 28px #3fd0ff); }

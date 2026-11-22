@@ -3,6 +3,7 @@
    - diálogos com efeito de máquina de escrever
    - mapa da Aeroplaca com as regiões
    - perguntas (quiz) que dão gotas de energia
+   - final do jogo
    ========================================================= */
 
 const Historia = (() => {
@@ -431,13 +432,70 @@ const Historia = (() => {
   }
 
   function final() {
-    falar(ROTEIRO.final, () => {
+    falar(ROTEIRO.final, mostrarFinal, { faixa: "NÚCLEO RESTAURADO", cenario: "nucleo" });
+  }
+
+  function montarFinal() {
+    const tela = App.garantirTela("tela-final");
+    tela.innerHTML = `
+      <div class="final vidro">
+        <div class="final-cristal"></div>
+        <h2>Aeroplaca salva!</h2>
+        <p class="final-sub">O velho PC ligou de novo, e você dominou os termos de Arquitetura Computacional.</p>
+        <div class="final-stats" id="final-stats"></div>
+        <div class="final-botoes">
+          <button class="btn vidro-btn" id="final-tabuleiro">Ver o tabuleiro</button>
+          <button class="btn verde" id="final-novo">↺ Novo jogo</button>
+        </div>
+        <p class="final-creditos pixel">OBRIGADO POR JOGAR!</p>
+      </div>`;
+    tela.querySelector(".final-cristal").appendChild(Pixel.criar("cristal", 12));
+    tela.querySelector("#final-tabuleiro").addEventListener("click", () => {
+      Sfx.clique();
+      App.modulos.cruzadinha.abrir();
+    });
+    tela.querySelector("#final-novo").addEventListener("click", () => {
+      Sfx.clique();
       App.modal({
-        titulo: "Aeroplaca salva! 💎",
-        html: "<p>Você restaurou as 16 Palavras-Chave do Núcleo de Cristal. Parabéns!</p>",
-        botoes: [{ texto: "Uhul!", classe: "verde", acao: abrirMapa }],
+        titulo: "Começar um novo jogo?",
+        html: "<p>Isso apaga o progresso, as gotas e o tabuleiro.</p>",
+        botoes: [
+          { texto: "Cancelar", classe: "vidro-btn" },
+          { texto: "Novo jogo", classe: "vermelho", acao: () => { App.novoJogo(); location.reload(); } },
+        ],
       });
-    }, { faixa: "NÚCLEO RESTAURADO", cenario: "nucleo" });
+    });
+  }
+
+  function mostrarFinal() {
+    // "boot" do PC: clarão + acorde
+    const flash = document.createElement("div");
+    flash.className = "boot-flash";
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 1600);
+    Sfx.ligar();
+
+    const totalPerguntas = ZONAS.reduce((s, z) => s + z.perguntas.length, 0);
+    const certas = ZONAS.reduce((s, z) => s + ((estado.zonas[z.id] || {}).acertadas || []).length, 0);
+    document.getElementById("final-stats").innerHTML = `
+      <div class="stat"><span class="pixel">16/16</span><small>palavras</small></div>
+      <div class="stat"><span class="pixel">${certas}/${totalPerguntas}</span><small>perguntas certas</small></div>
+      <div class="stat"><span class="pixel">${estado.gotasUsadas}</span><small>gotas usadas</small></div>`;
+
+    App.irPara("tela-final");
+    // chuva de bolhas comemorativa
+    for (let i = 0; i < 26; i++) {
+      setTimeout(() => {
+        const b = document.createElement("div");
+        b.className = "bolha festa";
+        b.style.setProperty("--tam", 16 + Math.random() * 40 + "px");
+        b.style.setProperty("--dur", 4 + Math.random() * 3 + "s");
+        b.style.setProperty("--balanco", Math.random() * 160 - 80 + "px");
+        b.style.left = Math.random() * 100 + "vw";
+        b.addEventListener("animationend", () => b.remove());
+        document.getElementById("bolhas").appendChild(b);
+      }, i * 90);
+    }
   }
 
   /* =======================================================
@@ -460,6 +518,7 @@ const Historia = (() => {
     montarCena();
     montarMapa();
     montarQuiz();
+    montarFinal();
 
     // botão "Mapa" no HUD (aparece depois do prólogo)
     const btnMapa = document.createElement("button");
