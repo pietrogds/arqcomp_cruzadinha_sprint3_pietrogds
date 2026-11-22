@@ -2,14 +2,16 @@
    CRUZADINHA.JS — o Núcleo de Cristal
    - monta o tabuleiro a partir de PALAVRAS
    - digitação direto nas casas + navegação por teclado
+   - Conferir, Reiniciar e contador de acertos
    ========================================================= */
 
 const Cruzadinha = (() => {
   const estado = App.estado;
-  let tela, grade, barraPista, listaH, listaV;
+  let tela, grade, barraPista, listaH, listaV, contador;
 
   const casas = {};        // "l,c" -> { input, div, palavras: [] }
   let selecao = { palavra: null, linha: 0, coluna: 0 };
+  let resultado = {};      // índice da palavra -> true/false (após Conferir)
 
   /* ---------- utilidades ---------- */
   const chave = (l, c) => l + "," + c;
@@ -57,6 +59,16 @@ const Cruzadinha = (() => {
             <p>Preencha as 16 Palavras-Chave de Arquitetura Computacional</p>
           </div>
         </div>
+        <div class="cz-placar" aria-live="polite">
+          <span class="cz-placar-num" id="cz-contador">0 de ${PALAVRAS.length}</span>
+          <span class="cz-placar-txt">palavras certas</span>
+          <div class="cz-barra"><div class="cz-barra-fill" id="cz-barra"></div></div>
+        </div>
+      </div>
+
+      <div class="cz-acoes">
+        <button class="btn verde" id="cz-conferir">✔ Conferir</button>
+        <button class="btn vermelho" id="cz-reiniciar">↺ Reiniciar</button>
       </div>
 
       <div class="cz-area">
@@ -78,9 +90,13 @@ const Cruzadinha = (() => {
     barraPista = tela.querySelector("#cz-pista-atual");
     listaH = tela.querySelector("#cz-lista-h");
     listaV = tela.querySelector("#cz-lista-v");
+    contador = tela.querySelector("#cz-contador");
 
     montarGrade();
     montarPistas();
+
+    tela.querySelector("#cz-conferir").addEventListener("click", conferir);
+    tela.querySelector("#cz-reiniciar").addEventListener("click", pedirReinicio);
   }
 
   function montarGrade() {
@@ -225,6 +241,7 @@ const Cruzadinha = (() => {
     input.value = letra;
     estado.letras[k] = letra;
     App.salvar();
+    limparMarcas(k);
     if (letra) {
       Sfx.tecla();
       casas[k].div.classList.remove("pop");
@@ -285,10 +302,113 @@ const Cruzadinha = (() => {
       casas[k].input.value = "";
       estado.letras[k] = "";
       App.salvar();
+      limparMarcas(k);
     }
     selecao.linha = prox.l;
     selecao.coluna = prox.c;
     casas[k].input.focus();
+  }
+
+  /* ---------- conferir ---------- */
+  function palavraCerta(p) {
+    return celulasDa(p).every(({ l, c, letra }) => (estado.letras[chave(l, c)] || "") === letra);
+  }
+
+  function limparMarcas(k) {
+    casas[k].div.classList.remove("certa", "errada");
+    casas[k].palavras.forEach((i) => {
+      if (i in resultado) {
+        delete resultado[i];
+        const li = tela.querySelector(`.cz-item[data-indice="${i}"]`);
+        li.classList.remove("certa", "errada");
+      }
+    });
+  }
+
+  function conferir() {
+    Sfx.clique();
+    resultado = {};
+    let acertos = 0;
+
+    PALAVRAS.forEach((p, i) => {
+      const ok = palavraCerta(p);
+      resultado[i] = ok;
+      if (ok) acertos++;
+      const li = tela.querySelector(`.cz-item[data-indice="${i}"]`);
+      li.classList.toggle("certa", ok);
+      li.classList.toggle("errada", !ok);
+    });
+
+    // casa verde se pertence a alguma palavra certa; vermelha se só está em palavras erradas
+    Object.values(casas).forEach((casa) => {
+      const algumaCerta = casa.palavras.some((i) => resultado[i]);
+      casa.div.classList.remove("certa", "errada", "brilho");
+      void casa.div.offsetWidth;
+      casa.div.classList.add(algumaCerta ? "certa" : "errada");
+      if (algumaCerta) casa.div.classList.add("brilho");
+    });
+
+    atualizarContador(acertos);
+
+    if (acertos === PALAVRAS.length) {
+      Sfx.vitoria();
+      estado.venceu = true;
+      App.salvar();
+      tela.classList.add("vitoria");
+      setTimeout(() => {
+        if (App.modulos.historia) App.modulos.historia.final();
+        else App.modal({ titulo: "Núcleo restaurado! 💎", html: "<p>Você acertou as 16 palavras. Parabéns!</p>", botoes: [{ texto: "Uhul!", classe: "verde" }] });
+      }, 900);
+    } else if (acertos > 0) {
+      Sfx.acerto();
+      App.toast(`✔ ${acertos} de ${PALAVRAS.length} palavras certas. Continue!`);
+    } else {
+      Sfx.erro();
+      App.toast("Nenhuma palavra completa ainda... confira as pistas!");
+    }
+  }
+
+  function atualizarContador(acertos) {
+    contador.textContent = `${acertos} de ${PALAVRAS.length}`;
+    tela.querySelector("#cz-barra").style.width = (acertos / PALAVRAS.length) * 100 + "%";
+    contador.classList.remove("pulo");
+    void contador.offsetWidth;
+    contador.classList.add("pulo");
+    const cristal = tela.querySelector(".cz-cristal");
+    cristal.innerHTML = "";
+    cristal.appendChild(Pixel.criar(acertos === PALAVRAS.length ? "cristal" : "cristalCorrompido", 4));
+  }
+
+  /* ---------- reiniciar ---------- */
+  function pedirReinicio() {
+    Sfx.clique();
+    App.modal({
+      titulo: "Reiniciar o tabuleiro?",
+      html: "<p>Todas as letras serão apagadas.</p>",
+      botoes: [
+        { texto: "Cancelar", classe: "vidro-btn" },
+        { texto: "Limpar tudo", classe: "vermelho", acao: reiniciar },
+      ],
+    });
+  }
+
+  function reiniciar() {
+    estado.letras = {};
+    estado.venceu = false;
+    App.salvar();
+    resultado = {};
+    Object.values(casas).forEach((casa) => {
+      casa.input.value = "";
+      casa.div.classList.remove("certa", "errada", "brilho");
+    });
+    tela.querySelectorAll(".cz-item").forEach((li) => li.classList.remove("certa", "errada"));
+    tela.classList.remove("vitoria");
+    atualizarContador(0);
+    selecao.palavra = null;
+    destacar();
+    barraPista.textContent = "Tabuleiro limpo! Clique numa casa para começar.";
+    Sfx.bolha();
+    App.toast("Tabuleiro reiniciado 🫧");
   }
 
   /* ---------- API do módulo ---------- */
